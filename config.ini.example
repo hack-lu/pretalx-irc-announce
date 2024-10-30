@@ -1,0 +1,10 @@
+[IRC]
+Server = irc.your.server
+Port = 6667
+Nickname = NickOfYourBot
+NickServPassword = yourNickServPassword
+
+[API]
+ApiUrl =
+# Could be: https://pretalx.com/hack-lu-2024/schedule/export/schedule.json
+ApiToken =
