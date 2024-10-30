@@ -1,0 +1,15 @@
+HEAD
+branches/
+config
+description
+hooks/
+info/
+objects/
+refs/
+bin/
+config.ini
+lib/
+lib64/
+pyvenv.cfg
+quotes.txt
+sample.json
