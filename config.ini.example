@@ -8,3 +8,10 @@ NickServPassword = yourNickServPassword
 ApiUrl =
 # Could be: https://pretalx.com/hack-lu-2024/schedule/export/schedule.json
 ApiToken =
+
+[ROOM_MAPPING]
+Europe - Main Room = #europe
+Schengen 1 & 2 = #schengen
+Echternach & Diekirch = #echternachdiekirch
+Hollenfels = #hollenfels
+Vianden & Wiltz = #viandenwiltz
