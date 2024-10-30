@@ -6,9 +6,10 @@ import threading
 import random
 import sys
 from irc.bot import SingleServerIRCBot
+
 import configparser
 import readline
-import threading
+
 
 class ScheduleAnnouncer(SingleServerIRCBot):
     def show_rooms(self):
@@ -16,8 +17,8 @@ class ScheduleAnnouncer(SingleServerIRCBot):
         for idx, (room_name, channel) in enumerate(self.room_mapping.items(), start=1):
             print(f"  {idx}: {room_name} -> {channel}")
         self.room_index_mapping = {str(idx): channel for idx, (_, channel) in enumerate(self.room_mapping.items(), start=1)}
-
-    def __init__(self, config_file, room_mapping, json_file=None):
+  
+    def __init__(self, config_file, json_file=None):
         config = configparser.ConfigParser()
         config.read(config_file)
 
@@ -30,7 +31,7 @@ class ScheduleAnnouncer(SingleServerIRCBot):
         api_token = config['API']['ApiToken']
 
         super().__init__([(server, port)], nickname, nickname)
-        self.room_mapping = room_mapping
+        self.room_mapping = {room: channel for room, channel in config['ROOM_MAPPING'].items()}
         self.announced_talks = set()
         self.started_talks = set()
         self.ended_talks = set()
@@ -124,7 +125,7 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                     room_index = room_index.strip()
                     if room_index in self.room_index_mapping:
                         irc_room = self.room_index_mapping[room_index]
-
+                        
                         self.connection.privmsg(irc_room, f"[Announcement] {message}")
                         print(f"[IRC] Notified room {irc_room}: {message}")
                     else:
@@ -210,7 +211,7 @@ class ScheduleAnnouncer(SingleServerIRCBot):
             print(f"Simulation speed set to: {self.simulation_speed}")
         except ValueError:
             print("Invalid speed factor. Please provide an integer value.")
-
+    
     def show_current_sessions(self):
         current_time = self.debug_current_time or datetime.datetime.now()
         currently_running_sessions = []
@@ -322,20 +323,9 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                             print(f"[IRC] Announced: {end_message} in room: {irc_room}")  # Debug output
                             self.ended_talks.add(talk_id)
             time.sleep(1 / self.simulation_speed)  # Adjust sleep for simulation speed
-if __name__ == "__main__":
 
-    SERVER = "irc.hack.lu"
-    PORT = 6667
-    NICKNAME = "ScheduleBot"
-    ROOM_MAPPING = {
-        "Europe - Main Room": "#europe",
-        "Schengen 1 & 2": "#schengen",
-        "Echternach & Diekirch": "#echternachdiekirch",
-        "Hollenfels": "#hollenfels",
-        "Vianden & Wiltz": "#viandenwiltz"
-    }
-
-    bot = ScheduleAnnouncer('config.ini', ROOM_MAPPING, json_file=None)
+if __name__ == "__main__":          
+    bot = ScheduleAnnouncer('config.ini', json_file=None)
     bot.start()
 
     # Keep the main thread running to avoid immediate exit
