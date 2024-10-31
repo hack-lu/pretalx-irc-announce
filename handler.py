@@ -12,12 +12,19 @@ import readline
 
 
 class ScheduleAnnouncer(SingleServerIRCBot):
+    def get_irc_room(self, room_name):
+        normalized_name = room_name.strip().lower()  # Normalize input for lookup
+        for key in self.room_mapping:
+            if key.strip().lower() == normalized_name:
+                return self.room_mapping[key]
+        return "Room not found"
+
     def show_rooms(self):
         print("Available IRC rooms:")
         for idx, (room_name, channel) in enumerate(self.room_mapping.items(), start=1):
             print(f"  {idx}: {room_name} -> {channel}")
         self.room_index_mapping = {str(idx): channel for idx, (_, channel) in enumerate(self.room_mapping.items(), start=1)}
-  
+
     def __init__(self, config_file, json_file=None):
         config = configparser.ConfigParser()
         config.read(config_file)
@@ -125,7 +132,7 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                     room_index = room_index.strip()
                     if room_index in self.room_index_mapping:
                         irc_room = self.room_index_mapping[room_index]
-                        
+
                         self.connection.privmsg(irc_room, f"[Announcement] {message}")
                         print(f"[IRC] Notified room {irc_room}: {message}")
                     else:
@@ -211,7 +218,7 @@ class ScheduleAnnouncer(SingleServerIRCBot):
             print(f"Simulation speed set to: {self.simulation_speed}")
         except ValueError:
             print("Invalid speed factor. Please provide an integer value.")
-    
+
     def show_current_sessions(self):
         current_time = self.debug_current_time or datetime.datetime.now()
         currently_running_sessions = []
@@ -257,6 +264,22 @@ class ScheduleAnnouncer(SingleServerIRCBot):
         threading.Thread(target=self.announce_schedule, daemon=True).start()
 
     def announce_schedule(self):
+        def get_irc_room(room_name):
+            irc_room = self.room_mapping.get(room_name)
+            if irc_room:
+                return irc_room
+            else:
+                print(f"Room '{room_name}' not found in room mapping.")
+                return None
+
+
+        def create_irc_room(talk_id, title, event_type):
+            prefix = event_type.lower()
+            irc_room_name = f"#{prefix}-{talk_id}"
+            self.connection.join(irc_room_name, key='')
+            self.connection.mode(irc_room_name, '+PH 100:1440')
+            self.connection.topic(irc_room_name, f"{title}")
+            print(f"[IRC] Created and set topic for room: {irc_room_name}")
         while self.running:
             if self.debug_current_time:
                 self.debug_current_time += datetime.timedelta(seconds=self.simulation_speed)
@@ -280,7 +303,7 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                         except ValueError:
                             duration = 60  # Default to 60 minutes if parsing fails
                         talk_end_datetime = talk_datetime + datetime.timedelta(minutes=duration)
-                        talk_id = f"{talk['id']}-{room}"  # Unique identifier for each talk
+                        talk_id = f"{talk['id']}"  # Unique identifier for each talk
 
                         # Determine if it's a talk or a workshop/training
                         if room == "Europe - Main Room":
@@ -291,13 +314,16 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                         # Announce 5 minutes before the event starts
                         if (current_time >= (talk_datetime - datetime.timedelta(minutes=5)) and current_time < talk_datetime
                                 and talk_id not in self.announced_talks):
+                            # Create IRC room asynchronously
+                            threading.Thread(target=create_irc_room, args=(talk['id'], talk['title'], event_type), daemon=True).start()
                             title = talk['title']
                             speaker = talk['persons'][0]['public_name'] if talk.get('persons') else 'Unknown Speaker'
                             talk_url = talk.get('url', 'No URL available')
-                            message = f"Upcoming {event_type}: '{title}' by {speaker} at {talk['start']} in {room} in 5 minutes. More info: {talk_url}"
-                            irc_room = self.room_mapping.get(room, "#general")
+                            irc_dedicated_room = f"#{event_type.lower()}-{talk['id']}"
+                            irc_room = self.get_irc_room(room)
+                            message = f"Upcoming {event_type}: '{title}' by {speaker} at {talk['start']} in {room} in 5 minutes | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
                             self.connection.privmsg(irc_room, f"[Announcement] {message}")
-                            print(f"[IRC] Announced: {message} in room: {irc_room}")  # Debug output
+                            print(f"[IRC] Announced: {message} in channel: {irc_room}")  # Debug output
                             self.announced_talks.add(talk_id)
 
                         # Announce when the event starts (within a 1-minute window)
@@ -306,10 +332,11 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                             title = talk['title']
                             speaker = talk['persons'][0]['public_name'] if talk.get('persons') else 'Unknown Speaker'
                             talk_url = talk.get('url', 'No URL available')
-                            start_message = f"Session begins: '{title}' by {speaker} in {room} on {day_date}. More info: {talk_url}"
-                            irc_room = self.room_mapping.get(room, "#general")
+                            irc_dedicated_room = f"#{event_type.lower()}-{talk['id']}"
+                            irc_room = self.get_irc_room(room)
+                            start_message = f"Session begins: '{title}' by {speaker} in {room} | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
                             self.connection.privmsg(irc_room, f"[Announcement] {start_message}")
-                            print(f"[IRC] Announced: {start_message} in room: {irc_room}")  # Debug output
+                            print(f"[IRC] Announced: {start_message} in channel: {irc_room}")  # Debug output
                             self.started_talks.add(talk_id)
 
                         # Announce when the event ends (within a 1-minute window)
@@ -317,14 +344,15 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                                 and talk_id not in self.ended_talks):
                             title = talk['title']
                             talk_url = talk.get('url', 'No URL available')
-                            end_message = f"Session ends: '{title}' in {room} on {day_date}. More info: {talk_url}"
-                            irc_room = self.room_mapping.get(room, "#general")
+                            irc_dedicated_room = f"#{event_type.lower()}-{talk['id']}"
+                            irc_room = self.get_irc_room(room)
+                            end_message = f"Session ends: '{title}' in {room} | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
                             self.connection.privmsg(irc_room, f"[Announcement] {end_message}")
-                            print(f"[IRC] Announced: {end_message} in room: {irc_room}")  # Debug output
+                            print(f"[IRC] Announced: {end_message} in channel: {irc_room}")  # Debug output
                             self.ended_talks.add(talk_id)
             time.sleep(1 / self.simulation_speed)  # Adjust sleep for simulation speed
 
-if __name__ == "__main__":          
+if __name__ == "__main__":
     bot = ScheduleAnnouncer('config.ini', json_file=None)
     bot.start()
 
