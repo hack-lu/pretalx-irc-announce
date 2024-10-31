@@ -311,53 +311,38 @@ class ScheduleAnnouncer(SingleServerIRCBot):
                         else:
                             event_type = "Workshop/Training"
 
+                        title = talk['title']
+                        speaker = talk['persons'][0]['public_name'] if talk.get('persons') else 'Unknown Speaker'
+                        talk_url = talk.get('url', 'No URL available')
+                        irc_dedicated_room = f"#{event_type.lower()}-{talk['id']}"
+                        irc_room = self.get_irc_room(room)
                         # Announce 5 minutes before the event starts
                         if (current_time >= (talk_datetime - datetime.timedelta(minutes=5)) and current_time < talk_datetime
                                 and talk_id not in self.announced_talks):
                             # Create IRC room asynchronously
                             threading.Thread(target=create_irc_room, args=(talk['id'], talk['title'], event_type), daemon=True).start()
-                            title = talk['title']
-                            speaker = talk['persons'][0]['public_name'] if talk.get('persons') else 'Unknown Speaker'
-                            talk_url = talk.get('url', 'No URL available')
-                            irc_dedicated_room = f"#{event_type.lower()}-{talk['id']}"
-                            irc_room = self.get_irc_room(room)
                             message = f"Upcoming {event_type}: '{title}' by {speaker} at {talk['start']} in {room} in 5 minutes | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
-                            self.connection.privmsg(irc_room, f"[Announcement] {message}")
+                            self.connection.privmsg(irc_room, f"{message}")
                             print(f"[IRC] Announced: {message} in channel: {irc_room}")  # Debug output
                             self.announced_talks.add(talk_id)
 
                         # Announce when the event starts (within a 1-minute window)
                         if (talk_datetime <= current_time < (talk_datetime + datetime.timedelta(minutes=1))
                                 and talk_id not in self.started_talks):
-                            title = talk['title']
-                            speaker = talk['persons'][0]['public_name'] if talk.get('persons') else 'Unknown Speaker'
-                            talk_url = talk.get('url', 'No URL available')
-                            irc_dedicated_room = f"#{event_type.lower()}-{talk['id']}"
-                            irc_room = self.get_irc_room(room)
-                            start_message = f"Session begins: '{title}' by {speaker} in {room} | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
-                            self.connection.privmsg(irc_room, f"[Announcement] {start_message}")
-                            print(f"[IRC] Announced: {start_message} in channel: {irc_room}")  # Debug output
+                            message = f"Session begins: '{title}' by {speaker} in {room} | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
+                            self.connection.privmsg(irc_room, f"{message}")
+                            print(f"[IRC] Announced: {message} in channel: {irc_room}")  # Debug output
                             self.started_talks.add(talk_id)
 
                         # Announce when the event ends (within a 1-minute window)
                         if (talk_end_datetime <= current_time < (talk_end_datetime + datetime.timedelta(minutes=1))
                                 and talk_id not in self.ended_talks):
-                            title = talk['title']
-                            talk_url = talk.get('url', 'No URL available')
-                            irc_dedicated_room = f"#{event_type.lower()}-{talk['id']}"
-                            irc_room = self.get_irc_room(room)
-                            end_message = f"Session ends: '{title}' in {room} | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
-                            self.connection.privmsg(irc_room, f"[Announcement] {end_message}")
-                            print(f"[IRC] Announced: {end_message} in channel: {irc_room}")  # Debug output
+                            message = f"Session ends: '{title}' in {room} | More info: {talk_url} | Dedicated IRC Room for this session: {irc_dedicated_room}"
+                            self.connection.privmsg(irc_room, f"{message}")
+                            print(f"[IRC] Announced: {message} in channel: {irc_room}")  # Debug output
                             self.ended_talks.add(talk_id)
             time.sleep(1 / self.simulation_speed)  # Adjust sleep for simulation speed
 
 if __name__ == "__main__":
     bot = ScheduleAnnouncer('config.ini', json_file=None)
     bot.start()
-
-    # Keep the main thread running to avoid immediate exit
-    try:
-        threading.Event().wait()
-    except KeyboardInterrupt:
-        bot.quit_bot()
